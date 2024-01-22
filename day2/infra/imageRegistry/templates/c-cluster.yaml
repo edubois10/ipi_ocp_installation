@@ -1,0 +1,27 @@
+apiVersion: imageregistry.operator.openshift.io/v1
+kind: Config
+metadata:
+  name: cluster
+spec:
+  logLevel: Normal
+  nodeSelector:
+    node-role.kubernetes.io/infra: ''
+  rolloutStrategy: Recreate
+  operatorLogLevel: Normal
+  requests:
+    read:
+      maxWaitInQueue: 0s
+    write:
+      maxWaitInQueue: 0s
+  observedConfig: null
+  managementState: Removed
+  proxy: {}
+  unsupportedConfigOverrides: null
+  storage:
+    pvc:
+      claim: image-registry-storage
+  replicas: 1
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/infra
+      operator: Exists

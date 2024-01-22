@@ -1,0 +1,27 @@
+clusterMonitoring:
+  enabled: true
+  persistentEnabled: true
+  prometheusK8s:
+    storageSize: 40Gi
+    retention: 7d
+  alert:
+    storageSize: 15Gi
+  thanosQuerier:
+    limits:
+      cpu: 50m
+      memory: 2048Mi
+    requests:
+      cpu: 5m
+      memory: 125Mi
+  enableUserWorkload: false
+
+userMonitoring:
+  persistentEnabled: false
+  thanosRuler:
+    storageSize: 10Gi
+  prometheus:
+    storageSize: 40Gi
+    retention: 7d
+
+grafanaMonitoring:
+  enabled: false

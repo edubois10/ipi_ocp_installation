@@ -1,0 +1,150 @@
+{{ if .Values.clusterMonitoring.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    enableUserWorkload: {{ .Values.clusterMonitoring.enableUserWorkload }}
+    alertmanagerMain:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      {{- if .Values.clusterMonitoring.persistentEnabled }}
+      volumeClaimTemplate:
+        spec:
+          storageClassName: thin
+          resources:
+            requests:
+              storage: {{ .Values.clusterMonitoring.alert.storageSize }}
+      {{- end }}
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    openshiftStateMetrics:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    prometheusK8s:
+      retention: {{ .Values.clusterMonitoring.prometheusK8s.retention }}
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      {{- if .Values.clusterMonitoring.persistentEnabled }}
+      volumeClaimTemplate:
+        spec:
+          storageClassName: thin
+          resources:
+            requests:
+              storage: {{ .Values.clusterMonitoring.prometheusK8s.storageSize }}
+              {{- if .Values.clusterMonitoring.prometheusK8s.requests }}
+              cpu: {{ .Values.clusterMonitoring.prometheusK8s.requests.cpu }}
+              memory: {{ .Values.clusterMonitoring.prometheusK8s.requests.memory }}
+              {{- end }}
+      {{- end }}
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    prometheusOperator:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    nodeExporter:
+      tolerations:
+        - operator: Exists
+    kubeStateMetrics:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    grafana:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    telemeterClient:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+    thanosQuerier:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+      resources:
+        limits:
+          cpu: {{ .Values.clusterMonitoring.thanosQuerier.limits.cpu }}
+          memory: {{ .Values.clusterMonitoring.thanosQuerier.limits.memory }}
+        requests:
+          cpu: {{ .Values.clusterMonitoring.thanosQuerier.requests.cpu }}
+          memory: {{ .Values.clusterMonitoring.thanosQuerier.requests.cpu }}
+    k8sPrometheusAdapter:
+      nodeSelector:
+        node-role.kubernetes.io/infra: ""
+      tolerations:
+        - effect: NoSchedule
+          key: infra
+          operator: Equal
+          value: reserved
+        - effect: NoExecute
+          key: infra
+          operator: Equal
+          value: reserved
+{{- end }}

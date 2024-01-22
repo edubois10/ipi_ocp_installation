@@ -1,0 +1,47 @@
+apiVersion: machine.openshift.io/v1beta1
+kind: MachineSet
+metadata:
+  labels:
+    machine.openshift.io/cluster-api-cluster: khm8m-qb89r
+  name: khm8m-qb89r-app
+  namespace: openshift-machine-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: khm8m-qb89r
+      machine.openshift.io/cluster-api-machineset: khm8m-qb89r-app
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: khm8m-qb89r
+        machine.openshift.io/cluster-api-machine-role: app
+        machine.openshift.io/cluster-api-machine-type: app
+        machine.openshift.io/cluster-api-machineset: khm8m-qb89r-app
+    spec:
+      lifecycleHooks: {}
+      metadata: {}
+      providerSpec:
+        value:
+          apiVersion: machine.openshift.io/v1beta1
+          credentialsSecret:
+            name: vsphere-cloud-credentials
+          diskGiB: 120
+          kind: VSphereMachineProviderSpec
+          memoryMiB: 16384
+          metadata:
+          network:
+            devices:
+            - networkName: segment-sandbox-khm8m
+          numCPUs: 4
+          numCoresPerSocket: 4
+          snapshot: ""
+          template: khm8m-qb89r-rhcos-generated-region-generated-zone
+          userDataSecret:
+            name: worker-user-data
+          workspace:
+            datacenter: SDDC-Datacenter
+            datastore: /SDDC-Datacenter/datastore/WorkloadDatastore
+            folder: /SDDC-Datacenter/vm/Workloads/sandbox-khm8m
+            resourcePool: /SDDC-Datacenter/host/Cluster-1//Resources
+            server: portal.vc.opentlc.com
