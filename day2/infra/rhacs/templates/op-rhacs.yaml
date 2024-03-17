@@ -3,5 +3,7 @@ kind: OperatorGroup
 metadata:
   name: rhacs-operator
   namespace: rhacs-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   upgradeStrategy: Default

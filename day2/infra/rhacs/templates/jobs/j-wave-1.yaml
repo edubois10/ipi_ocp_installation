@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: check-rhacs-operator-install
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  template:
+    spec:
+      containers:
+      - name: check-rhacs-operator-install
+        image: quay.io/edubois10/rhacs-tool:test-3
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          while [ "$(oc get pods -n rhacs-operator | grep rhacs-operator-controller-manager- | awk '{print $2}')" != "1/1" ]; do 
+            sleep 5; 
+          done
+      restartPolicy: Never
+  backoffLimit: 4
