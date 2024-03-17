@@ -1,0 +1,182 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  name: create-cluster-init-bundle
+  namespace: rhacs-operator
+spec:
+  template:
+    spec:
+      containers:
+        - image: quay.io/edubois10/rhacs-tool:test-3
+          env:
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName }}
+            - name: CENTRAL_ENDPOINT
+              value: {{ .Values.centralEndpoint }}
+            - name: SECUREDCLUSTER_INSTANCE_NAMESPACE
+              value: rhacs-operator
+            - name: SKIP_TLS_VERIFY
+              value: 'true'
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: central-htpasswd
+                  key: password
+          command:
+            - /usr/bin/python3
+            - -c
+            - |
+              import sys, os, json, requests, time, subprocess, base64
+              from subprocess import PIPE
+              from requests.auth import HTTPBasicAuth
+              import http.client as http_client
+              import logging as log
+              def is_central_available():
+                max_attempts = 30
+                retry_interval = 10
+                for i in range(max_attempts):
+                  try:
+                    response = session.get(url=base_url)
+                    response.raise_for_status()
+                    break
+                  except requests.exceptions.RequestException as e:
+                    log.exception('Request failed')
+                  if i == (max_attempts-1):
+                    log.error('Reached maximum number of attempts')
+                    return False
+                  else:
+                    log.error(f'Attempt {i+1} out of {max_attempts} failed. Retrying in {retry_interval} seconds...')
+                  time.sleep(retry_interval)
+                return True
+              def get_init_bundle(bundle_name):
+                response = session.get(url=f'{base_url}/v1/cluster-init/init-bundles')
+                response.raise_for_status()
+                return next((item for item in response.json()['items'] if item["name"] == cluster_name),None)
+              def create_init_bundle():
+                data = {
+                  'name': cluster_name
+                }
+                response = session.post(url=f'{base_url}/v1/cluster-init/init-bundles', json=data)
+                response.raise_for_status()
+                return base64.b64decode(response.json()['kubectlBundle'])
+              def delete_init_bundle(bundle):
+                data = {
+                  'ids': [
+                    bundle['id']
+                  ],
+                  'confirmImpactedClustersIds': [impacted_cluster['id'] for impacted_cluster in bundle['impactedClusters']]
+                }
+                session.patch(url=f'{base_url}/v1/cluster-init/init-bundles/revoke', json=data).raise_for_status()
+              def apply_init_bundle(init_bundle):
+                with open('/tmp/init-bundle.yaml', 'wb') as f:
+                  f.write(init_bundle)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'apply', '-f', '/tmp/init-bundle.yaml'], stdout=PIPE, check=True)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=sensor', '--ignore-not-found=true'], stdout=PIPE, check=True)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=collector', '--ignore-not-found=true'], stdout=PIPE, check=True)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=admission-control', '--ignore-not-found=true'], stdout=PIPE, check=True)
+              def is_bundle_applied():
+                return subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'get', 'secret', 'sensor-tls', 'admission-control-tls', 'collector-tls'], stdout=PIPE, stderr=PIPE).returncode == 0
+              def restart_components():
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=sensor', '--ignore-not-found=true'], stdout=PIPE, check=True)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=collector', '--ignore-not-found=true'], stdout=PIPE, check=True)
+                subprocess.run(['oc', '-n', securedcluster_instance_namespace, 'delete', 'pod', '-l', 'app=admission-control', '--ignore-not-found=true'], stdout=PIPE, check=True)
+              # Setup logging
+              loggingLevel = os.getenv('LOG_LEVEL')
+              if not loggingLevel:
+                loggingLevel = 'INFO'
+              log.basicConfig(
+                format = '%(asctime)s %(levelname)-8s %(message)s',
+                datefmt = '%Y-%m-%d %H:%M:%S'
+              )
+              log.getLogger().setLevel(loggingLevel)
+              if loggingLevel == 'DEBUG':
+                http_client.HTTPConnection.debuglevel = 1
+              if not os.getenv('LOG_LEVEL'):
+                log.info(f'Logging level set to {loggingLevel}. Use environment variable "LOG_LEVEL" to override')
+              # Check required environment variables
+              missing_required_env_variable = False
+              if not os.getenv('ADMIN_PASSWORD'):
+                log.error('Required environment variable "ADMIN_PASSWORD" is not set')
+                missing_required_env_variable = True
+              if not os.getenv('CLUSTER_NAME'):
+                log.error('Required environment variable "CLUSTER_NAME" is not set')
+                missing_required_env_variable = True
+              if missing_required_env_variable:
+                log.error('Exiting')
+                sys.exit(1)
+              admin_password = os.getenv('ADMIN_PASSWORD')
+              cluster_name  = os.getenv('CLUSTER_NAME')
+              # Check optional environment variables
+              central_endpoint = os.getenv('CENTRAL_ENDPOINT')
+              if not central_endpoint:
+                log.info('Environment variable "CENTRAL_ENDPOINT" is not set. Using default value "central"')
+                central_endpoint = 'central'
+              securedcluster_instance_namespace = os.getenv('SECUREDCLUSTER_INSTANCE_NAMESPACE')
+              if not securedcluster_instance_namespace:
+                log.info('Environment variable "SECUREDCLUSTER_INSTANCE_NAMESPACE" is not set. Using default value "stackrox"')
+                securedcluster_instance_namespace = 'stackrox'
+              if not os.getenv('FORCE_RECREATE_INIT_BUNDLE'):
+                log.info('Environment variable "FORCE_RECREATE_INIT_BUNDLE" is not set. Using default value "false"')
+                force_recreate_bundle = False
+              else:
+                force_recreate_bundle = os.getenv('FORCE_RECREATE_INIT_BUNDLE') and os.getenv('FORCE_RECREATE_INIT_BUNDLE').lower()=='true'
+              session = requests.Session()
+              session.auth = HTTPBasicAuth('admin', admin_password)
+              if os.getenv('SKIP_TLS_VERIFY') and os.getenv('SKIP_TLS_VERIFY').lower() == 'true':
+                session.verify = False
+              base_url = f'https://{central_endpoint}'
+              log.info('Checking if Central is available')
+              if not is_central_available():
+                log.error('Central is not available. Exiting')
+                sys.exit(1)
+              log.info('Central is available')
+              log.info(f'Checking if init bundle {cluster_name} already exists in Central')
+              bundle = get_init_bundle(cluster_name)
+              if bundle:
+                log.info(f'Init bundle {cluster_name} already exists in Central')
+                if force_recreate_bundle:
+                  log.info(f'Init bundle {cluster_name} already exists in Central, but force recreate flag is set to true, so it will be deleted and recreated')
+                  log.info(f'Deleting existing init bundle {cluster_name}')
+                  delete_init_bundle(bundle)
+                  log.info(f'Init bundle {cluster_name} has been successfully deleted')
+                elif is_bundle_applied():
+                  log.info(f'Init bundle {cluster_name} already applied to this cluster. Nothing to do')
+                  log.info('Job completed successfully')
+                  sys.exit(0)
+                else:
+                  log.info(f'Init bundle {cluster_name} already exists in Central, but has not been applied to this cluster, so it will be deleted and recreated')
+                  log.info(f'Deleting existing init bundle {cluster_name}')
+                  delete_init_bundle(bundle)
+                  log.info(f'Init bundle {cluster_name} has been successfully deleted')
+              else:
+                log.info(f'Init bundle {cluster_name} does not exist in Central')
+              log.info(f'Creating init bundle {cluster_name}')
+              init_bundle = create_init_bundle()
+              log.info(f'Init bundle {cluster_name} created successfully')
+              log.info(f'Applying init bundle {cluster_name} to this cluster')
+              apply_init_bundle(init_bundle)
+              log.info(f'Init bundle {cluster_name} applied successfully to this cluster')
+              log.info('Restarting required components')
+              restart_components()
+              log.info('Required components restarted successfully')
+              log.info('Job completed successfully')
+          imagePullPolicy: Always
+          name: create-cluster-init-bundle
+          volumeMounts:
+            - name: trusted-ca-bundle
+              mountPath: /etc/pki/ca-trust/extracted/pem
+              readOnly: true
+      volumes:
+        - name: trusted-ca-bundle
+          configMap:
+            name: securedcluster-jobs-trusted-ca-bundle
+            items:
+              - key: ca-bundle.crt
+                path: tls-ca-bundle.pem
+      dnsPolicy: ClusterFirst
+      restartPolicy: Never
+      serviceAccount: create-cluster-init-bundle
+      serviceAccountName: create-cluster-init-bundle
+      terminationGracePeriodSeconds: 30

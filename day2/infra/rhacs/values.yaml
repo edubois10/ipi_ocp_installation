@@ -1,0 +1,2 @@
+clusterName: test
+centralEndpoint: https://central-rhacs-operator.apps.cluster-fgwr9.dynamic.redhatworkshops.io

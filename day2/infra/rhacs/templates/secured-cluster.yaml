@@ -1,0 +1,28 @@
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecuredCluster
+metadata:
+  name: secured-cluster
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  admissionControl:
+    listenOnCreates: false
+    listenOnEvents: true
+    listenOnUpdates: false
+  auditLogs:
+    collection: Auto
+  centralEndpoint: "https://{{ .Values.centralEndpoint }}:443"
+  clusterName: {{ .Values.clusterName }}
+  perNode:
+    collector:
+      collection: KernelModule
+      imageFlavor: Regular
+      resources:
+        requests:
+          cpu: 30m
+          memory: 150Mi
+        limits:
+          cpu: 250m
+          memory: 512Mi
+    taintToleration: TolerateTaints

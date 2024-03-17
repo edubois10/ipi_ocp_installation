@@ -1,0 +1,10 @@
+apiVersion: v1
+data: {}
+kind: ConfigMap
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+  name: securedcluster-jobs-trusted-ca-bundle
+  namespace: rhacs-operator

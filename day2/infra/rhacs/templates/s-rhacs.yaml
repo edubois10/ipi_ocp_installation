@@ -1,0 +1,12 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: rhacs-operator
+  namespace: rhacs-operator
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: rhacs-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: rhacs-operator.v4.3.5
